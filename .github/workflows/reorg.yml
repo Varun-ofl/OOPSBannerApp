@@ -29,36 +29,57 @@ jobs:
 
           VARIANT_FILES=(OOPSBannerApp2.java OOPSBannerApp3.java OOPSBannerApp4.java OOPSBannerApp5.java OOPSBannerApp6.java OOPSBannerApp7.java OOPSBannerApp8.java)
 
+          # fetch so origin/main is up to date
+          git fetch origin
+
           for f in "${VARIANT_FILES[@]}"; do
+            # always start from a clean origin/main state before each branch
+            git checkout main
+            git reset --hard origin/main
+            git clean -fd
+
             if [ ! -f "$f" ]; then
               echo "Skipping missing $f"
               continue
             fi
+
             n="${f//[!0-9]/}"
             branch="variant-$n"
-            echo "Creating/updating branch $branch"
+            echo "Creating/updating branch $branch from origin/main"
+
             git checkout -B "$branch" origin/main
+
+            # copy this variant's code as the canonical OOPSBannerApp.java
             cp "$f" OOPSBannerApp.java
+
+            # remove all variant files (they belong in branches, not the file tree)
             for vf in "${VARIANT_FILES[@]}"; do
-              [ -f "$vf" ] && git rm -f "$vf" || true
+              git rm -f "$vf" 2>/dev/null || true
             done
+
             git add OOPSBannerApp.java
-            if ! git diff --cached --quiet; then
-              git commit -m "$branch: use $f as OOPSBannerApp.java"
-              git push -u origin "$branch"
-            else
-              echo "No changes to commit for $branch"
+            git commit -m "$branch: use $f as OOPSBannerApp.java"
+            git push -f origin "$branch"
+            echo "Pushed $branch successfully"
+          done
+
+          # cleanup main: remove all variant files, keep only OOPSBannerApp.java
+          git checkout main
+          git reset --hard origin/main
+          git clean -fd
+
+          changed=false
+          for vf in "${VARIANT_FILES[@]}"; do
+            if git ls-files --error-unmatch "$vf" 2>/dev/null; then
+              git rm -f "$vf"
+              changed=true
             fi
           done
 
-          # cleanup main: remove variant files so main only keeps OOPSBannerApp.java
-          git checkout main
-          for vf in "${VARIANT_FILES[@]}"; do
-            [ -f "$vf" ] && git rm -f "$vf" || true
-          done
-          if ! git diff --cached --quiet; then
-            git commit -m "Remove variant files; keep OOPSBannerApp.java as canonical main file"
+          if [ "$changed" = true ]; then
+            git commit -m "Remove variant files; OOPSBannerApp.java is the canonical main file"
             git push origin main
+            echo "main cleaned up successfully"
           else
-            echo "No changes required on main"
+            echo "main already clean — no changes needed"
           fi
