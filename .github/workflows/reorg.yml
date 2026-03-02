@@ -1,4 +1,5 @@
 name: Reorganize OOPSBannerApp variants
+
 on:
   workflow_dispatch:
 
@@ -16,25 +17,48 @@ jobs:
           fetch-depth: 0
 
       - name: Create variant branches and clean main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+
+          # configure git identity and auth
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/Varun-ofl/OOPSBannerApp.git
+
           VARIANT_FILES=(OOPSBannerApp2.java OOPSBannerApp3.java OOPSBannerApp4.java OOPSBannerApp5.java OOPSBannerApp6.java OOPSBannerApp7.java OOPSBannerApp8.java)
+
           for f in "${VARIANT_FILES[@]}"; do
-            [ -f "$f" ] || { echo "Skipping $f"; continue; }
+            if [ ! -f "$f" ]; then
+              echo "Skipping missing $f"
+              continue
+            fi
             n="${f//[!0-9]/}"
             branch="variant-$n"
+            echo "Creating/updating branch $branch"
             git checkout -B "$branch" origin/main
             cp "$f" OOPSBannerApp.java
-            for vf in "${VARIANT_FILES[@]}"; do [ -f "$vf" ] && git rm -f "$vf" || true; done
+            for vf in "${VARIANT_FILES[@]}"; do
+              [ -f "$vf" ] && git rm -f "$vf" || true
+            done
             git add OOPSBannerApp.java
             if ! git diff --cached --quiet; then
               git commit -m "$branch: use $f as OOPSBannerApp.java"
               git push -u origin "$branch"
+            else
+              echo "No changes to commit for $branch"
             fi
           done
+
+          # cleanup main: remove variant files so main only keeps OOPSBannerApp.java
           git checkout main
-          for vf in "${VARIANT_FILES[@]}"; do [ -f "$vf" ] && git rm -f "$vf" || true; done
+          for vf in "${VARIANT_FILES[@]}"; do
+            [ -f "$vf" ] && git rm -f "$vf" || true
+          done
           if ! git diff --cached --quiet; then
             git commit -m "Remove variant files; keep OOPSBannerApp.java as canonical main file"
             git push origin main
+          else
+            echo "No changes required on main"
           fi
