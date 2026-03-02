@@ -29,7 +29,7 @@ jobs:
 
           VARIANT_FILES=(OOPSBannerApp2.java OOPSBannerApp3.java OOPSBannerApp4.java OOPSBannerApp5.java OOPSBannerApp6.java OOPSBannerApp7.java OOPSBannerApp8.java)
 
-          git fetch origin --all
+          git fetch --all
 
           for f in "${VARIANT_FILES[@]}"; do
             n="${f//[!0-9]/}"
