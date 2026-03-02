@@ -1,0 +1,40 @@
+name: Reorganize OOPSBannerApp variants
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  reorg:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Create variant branches and clean main
+        run: |
+          set -euo pipefail
+          VARIANT_FILES=(OOPSBannerApp2.java OOPSBannerApp3.java OOPSBannerApp4.java OOPSBannerApp5.java OOPSBannerApp6.java OOPSBannerApp7.java OOPSBannerApp8.java)
+          for f in "${VARIANT_FILES[@]}"; do
+            [ -f "$f" ] || { echo "Skipping $f"; continue; }
+            n="${f//[!0-9]/}"
+            branch="variant-$n"
+            git checkout -B "$branch" origin/main
+            cp "$f" OOPSBannerApp.java
+            for vf in "${VARIANT_FILES[@]}"; do [ -f "$vf" ] && git rm -f "$vf" || true; done
+            git add OOPSBannerApp.java
+            if ! git diff --cached --quiet; then
+              git commit -m "$branch: use $f as OOPSBannerApp.java"
+              git push -u origin "$branch"
+            fi
+          done
+          git checkout main
+          for vf in "${VARIANT_FILES[@]}"; do [ -f "$vf" ] && git rm -f "$vf" || true; done
+          if ! git diff --cached --quiet; then
+            git commit -m "Remove variant files; keep OOPSBannerApp.java as canonical main file"
+            git push origin main
+          fi
