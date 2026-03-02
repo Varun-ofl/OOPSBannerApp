@@ -34,18 +34,18 @@ jobs:
             n="${f//[!0-9]/}"
             branch="variant-$n"
 
-            # Use -1 and --format to avoid any pipe (pipefail + head causes SIGPIPE/exit 141)
-            FCOMMIT=$(git log --all --format="%H" -1 -- "$f")
+            # --diff-filter=d (lowercase) EXCLUDES deletion commits,
+            # so this returns the commit where the file was last PRESENT (added/modified),
+            # not the commit that deleted it.
+            FCOMMIT=$(git log --all --diff-filter=d --format="%H" -1 -- "$f")
 
             if [ -z "$FCOMMIT" ]; then
-              echo "Skipping $f — not found anywhere in git history"
+              echo "Skipping $f — not found in git history"
               continue
             fi
 
-            echo "Found $f at $FCOMMIT — creating branch $branch"
+            echo "Restoring $f from commit $FCOMMIT — creating branch $branch"
             git checkout -B "$branch" origin/main
-
-            # Pull file content directly from history, no pipe needed
             git show "${FCOMMIT}:${f}" > OOPSBannerApp.java
 
             for vf in "${VARIANT_FILES[@]}"; do
@@ -58,7 +58,7 @@ jobs:
             echo "Pushed $branch"
           done
 
-          # Clean up main — variant files already gone, but verify
+          # main cleanup (variant files already gone from earlier run, but be safe)
           git checkout main
           git reset --hard origin/main
           CHANGED=false
@@ -71,7 +71,6 @@ jobs:
           if [ "$CHANGED" = true ]; then
             git commit -m "Remove variant files; OOPSBannerApp.java is the canonical main file"
             git push origin main
-            echo "main cleaned up"
           else
             echo "main already clean"
           fi
