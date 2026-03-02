@@ -20,37 +20,34 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -euo pipefail
+          set -eu
 
-          # configure git identity and auth
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
           git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/Varun-ofl/OOPSBannerApp.git
 
-          VARIANT_FILES=(OOPSBannerApp2.java OOPSBannerApp3.java OOPSBannerApp4.java OOPSBannerApp5.java OOPSBannerApp6.java OOPSBannerApp7.java OOPSBannerApp8.java)
-
           git fetch --all
+
+          VARIANT_FILES=(OOPSBannerApp2.java OOPSBannerApp3.java OOPSBannerApp4.java OOPSBannerApp5.java OOPSBannerApp6.java OOPSBannerApp7.java OOPSBannerApp8.java)
 
           for f in "${VARIANT_FILES[@]}"; do
             n="${f//[!0-9]/}"
             branch="variant-$n"
 
-            # Find the last commit in ALL history that had this file
-            FCOMMIT=$(git log --all --oneline -- "$f" | head -1 | awk '{print $1}')
+            # Use -1 and --format to avoid any pipe (pipefail + head causes SIGPIPE/exit 141)
+            FCOMMIT=$(git log --all --format="%H" -1 -- "$f")
+
             if [ -z "$FCOMMIT" ]; then
               echo "Skipping $f — not found anywhere in git history"
               continue
             fi
 
-            echo "Found $f at commit $FCOMMIT — creating branch $branch"
-
-            # Start fresh from origin/main
+            echo "Found $f at $FCOMMIT — creating branch $branch"
             git checkout -B "$branch" origin/main
 
-            # Extract the variant file content from history and place it as OOPSBannerApp.java
-            git show "$FCOMMIT:$f" > OOPSBannerApp.java
+            # Pull file content directly from history, no pipe needed
+            git show "${FCOMMIT}:${f}" > OOPSBannerApp.java
 
-            # Remove any variant files that may still exist on this branch
             for vf in "${VARIANT_FILES[@]}"; do
               git rm -f "$vf" 2>/dev/null || true
             done
@@ -58,22 +55,23 @@ jobs:
             git add OOPSBannerApp.java
             git commit -m "$branch: use $f as OOPSBannerApp.java"
             git push -f origin "$branch"
-            echo "Pushed $branch successfully"
+            echo "Pushed $branch"
           done
 
-          # Ensure main is clean (variant files removed, only OOPSBannerApp.java kept)
+          # Clean up main — variant files already gone, but verify
           git checkout main
           git reset --hard origin/main
-          changed=false
+          CHANGED=false
           for vf in "${VARIANT_FILES[@]}"; do
             if git ls-files --error-unmatch "$vf" 2>/dev/null; then
               git rm -f "$vf"
-              changed=true
+              CHANGED=true
             fi
           done
-          if [ "$changed" = true ]; then
+          if [ "$CHANGED" = true ]; then
             git commit -m "Remove variant files; OOPSBannerApp.java is the canonical main file"
             git push origin main
+            echo "main cleaned up"
           else
-            echo "main already clean — no changes needed"
+            echo "main already clean"
           fi
